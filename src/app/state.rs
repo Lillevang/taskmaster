@@ -1,11 +1,11 @@
 use crate::models::{Status, TodoItem};
-use std::io;
 use ratatui::{
     backend::Backend,
-    crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    crossterm::event::{self, Event, KeyEvent},
     widgets::ListState,
-    Terminal
+    Terminal,
 };
+use std::io;
 
 pub struct App {
     pub should_exit: bool,
@@ -51,35 +51,22 @@ impl FromIterator<(Status, &'static str, &'static str)> for TodoList {
 /// Check the event handling at the bottom to see how to change the state on incoming events. Check
 /// the drawing logic for items on how to specify the highlighting style for selected items.
 impl App {
-
-    pub fn run(&mut self, mut terminal: Terminal<impl Backend>) -> io::Result<()> {
+    pub fn run_with_handler<F>(
+        &mut self,
+        mut terminal: Terminal<impl Backend>,
+        handler: F,
+    ) -> io::Result<()>
+    where
+        F: Fn(&mut App, KeyEvent),
+    {
         while !self.should_exit {
             terminal.draw(|f| f.render_widget(&mut *self, f.area()))?;
             if let Event::Key(key) = event::read()? {
-                self.handle_key(key);
+                handler(self, key);
             };
         }
         Ok(())
     }
-
-    pub fn handle_key(&mut self, key: KeyEvent) {
-        if key.kind != KeyEventKind::Press {
-            return;
-        }
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.should_exit = true,
-            KeyCode::Char('h') | KeyCode::Left => self.select_none(),
-            KeyCode::Char('j') | KeyCode::Down => self.select_next(),
-            KeyCode::Char('k') | KeyCode::Up => self.select_previous(),
-            KeyCode::Char('g') | KeyCode::Home => self.select_first(),
-            KeyCode::Char('G') | KeyCode::End => self.select_last(),
-            KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
-                self.toggle_status();
-            }
-            _ => {}
-        }
-    }
-
     pub fn select_none(&mut self) {
         self.todo_list.state.select(None);
     }
