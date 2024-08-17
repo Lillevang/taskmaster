@@ -23,7 +23,7 @@ fn handle_task_list_input(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_editing_input(app: &mut App, key: KeyEvent) {
-    if let Some(editing_task) = &mut app.editing_task {
+    if let Some(_editing_task) = &mut app.editing_task {
         match key.code {
             KeyCode::Esc => app.cancel_editing(),
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => app.save_task(),
