@@ -1,15 +1,19 @@
+use crate::app::state::{EditingField, Mode};
+use crate::app::App;
+use crate::models;
+use crate::ui::theming::{
+    alternate_colors, COMPLETED_TEXT_FG_COLOR, NORMAL_ROW_BG, SELECTED_STYLE, TEXT_FG_COLOR,
+    TODO_HEADER_STYLE,
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Color},
+    style::{Color, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, StatefulWidget, Widget, Wrap},
-};
-use crate::app::App;
-use crate::app::state::{Mode, EditingField};
-use crate::models;
-use crate::ui::theming::{
-    TODO_HEADER_STYLE, NORMAL_ROW_BG, SELECTED_STYLE, TEXT_FG_COLOR, COMPLETED_TEXT_FG_COLOR, alternate_colors,
+    widgets::{
+        Block, Borders, HighlightSpacing, List, ListItem, Padding, Paragraph, StatefulWidget,
+        Widget, Wrap,
+    },
 };
 
 impl Widget for &mut App {
@@ -25,12 +29,12 @@ impl Widget for &mut App {
             .split(layout[0]);
 
         self.render_list(content_layout[0], buf); // Left pane for task list
-        
+
         match self.current_mode {
             Mode::TaskList => self.render_selected_item(content_layout[1], buf), // Right pane for task details
             Mode::Editing => self.render_editing_item(content_layout[1], buf), // Right pane for editing
         }
-        
+
         App::render_footer(layout[1], buf); // Footer section at the bottom
     }
 }
@@ -49,7 +53,7 @@ impl App {
             .borders(Borders::ALL)
             .border_style(TODO_HEADER_STYLE)
             .style(Style::default().bg(NORMAL_ROW_BG));
-    
+
         // Iterate through all elements in the `items` and stylize them.
         let items: Vec<ListItem> = self
             .todo_list
@@ -76,13 +80,13 @@ impl App {
                 ListItem::new(content).style(Style::default().bg(color))
             })
             .collect();
-    
+
         let list = List::new(items)
             .block(block)
             .highlight_style(SELECTED_STYLE)
             .highlight_symbol(">")
             .highlight_spacing(HighlightSpacing::Always);
-    
+
         // We need to disambiguate this trait method as both `Widget` and `StatefulWidget` share the
         // same method name `render`.
         StatefulWidget::render(list, area, buf, &mut self.todo_list.state);
@@ -106,7 +110,9 @@ impl App {
                     format!("☐ TODO: {}", selected_task.todo)
                 },
                 selected_task.info,
-                selected_task.due_date.map_or("No due date".to_string(), |d| format!("Due: {}", d)),
+                selected_task
+                    .due_date
+                    .map_or("No due date".to_string(), |d| format!("Due: {}", d)),
                 if !selected_task.tags.is_empty() {
                     format!("Tags: {}", selected_task.tags.join(", "))
                 } else {
@@ -132,9 +138,9 @@ impl App {
                 .border_style(TODO_HEADER_STYLE)
                 .style(Style::default().bg(NORMAL_ROW_BG))
                 .padding(Padding::horizontal(1));
-    
+
             let cursor_style = Style::default().fg(Color::White); // Set cursor color
-    
+
             // Task name field with cursor if active
             let task_name_line = if self.current_editing_field == EditingField::TaskName {
                 let cursor = if self.cursor_visible { "|" } else { " " };
@@ -146,7 +152,7 @@ impl App {
             } else {
                 Line::from(vec![Span::raw("Task: "), Span::raw(&editing_task.todo)])
             };
-    
+
             // Description field with cursor if active
             let description_line = if self.current_editing_field == EditingField::Description {
                 let cursor = if self.cursor_visible { "|" } else { " " };
@@ -156,9 +162,12 @@ impl App {
                     Span::styled(cursor, cursor_style),
                 ])
             } else {
-                Line::from(vec![Span::raw("Description: "), Span::raw(&editing_task.info)])
+                Line::from(vec![
+                    Span::raw("Description: "),
+                    Span::raw(&editing_task.info),
+                ])
             };
-    
+
             // Due date field with cursor if active
             let due_date_text = editing_task
                 .due_date_temp
@@ -174,7 +183,7 @@ impl App {
             } else {
                 Line::from(vec![Span::raw("Due Date: "), Span::raw(due_date_text)])
             };
-    
+
             // Tags field with cursor if active
             let tags_line = if self.current_editing_field == EditingField::Tags {
                 let cursor = if self.cursor_visible { "|" } else { " " };
@@ -184,9 +193,12 @@ impl App {
                     Span::styled(cursor, cursor_style),
                 ])
             } else {
-                Line::from(vec![Span::raw("Tags: "), Span::raw(editing_task.tags.join(", "))])
+                Line::from(vec![
+                    Span::raw("Tags: "),
+                    Span::raw(editing_task.tags.join(", ")),
+                ])
             };
-    
+
             // Combine all lines into a Text object
             let info = Text::from(vec![
                 task_name_line,
@@ -194,7 +206,7 @@ impl App {
                 due_date_line,
                 tags_line,
             ]);
-    
+
             Paragraph::new(info)
                 .block(block)
                 .style(Style::default().fg(TEXT_FG_COLOR))

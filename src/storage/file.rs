@@ -1,10 +1,10 @@
+use crate::models::TodoItem;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self};
 use std::path::Path;
-use serde::{Deserialize, Serialize}; 
-use crate::models::TodoItem;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TodoData {
     pub items: Vec<TodoItem>,
 }
@@ -18,7 +18,7 @@ pub fn save_to_file(path: &Path, todo_data: &TodoData) -> io::Result<()> {
 
     // Open the file for writing
     let file = fs::File::create(path)?;
-    
+
     // Write the TodoData to the file in pretty JSON format
     serde_json::to_writer_pretty(file, todo_data)?;
 
@@ -31,7 +31,7 @@ pub fn load_from_file(path: &Path) -> io::Result<TodoData> {
     if path.exists() {
         // Read the file content as a string
         let file_content = fs::read_to_string(path)?;
-        
+
         // Deserialize the JSON string into TodoData
         let todo_data: TodoData = serde_json::from_str(&file_content)?;
 

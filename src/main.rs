@@ -1,19 +1,19 @@
 mod app;
-mod models;
 mod handlers;
+mod models;
 mod storage;
-mod ui;
 mod tui;
+mod ui;
 
 use app::App;
+use crossterm::event::{self, Event};
 use handlers::handle_key;
 use std::error::Error;
 use std::time::{Duration, Instant};
-use crossterm::event::{self, Event };
 
 fn main() -> Result<(), Box<dyn Error>> {
     tui::init_error_hooks()?;
-    let mut terminal = tui::init_terminal()?;  // Make the terminal variable mutable
+    let mut terminal = tui::init_terminal()?; // Make the terminal variable mutable
 
     let mut app = App::load_or_default();
     let blink_interval = Duration::from_millis(500); // Blink every 500ms
@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if last_blink.elapsed() >= blink_interval {
             app.toggle_cursor_visibility(); // Toggle cursor visibility
             last_blink = Instant::now();
-            terminal.draw(|f| f.render_widget(&mut app, f.area()))?;  // Redraw UI to update cursor
+            terminal.draw(|f| f.render_widget(&mut app, f.area()))?; // Redraw UI to update cursor
         }
 
         // Non-blocking event handling

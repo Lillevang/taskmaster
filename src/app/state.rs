@@ -31,10 +31,10 @@ pub struct TodoList {
     pub items: Vec<TodoItem>,
     pub state: ListState,
 }
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Mode {
     TaskList,
-    Editing
+    Editing,
 }
 
 impl Default for App {
@@ -78,7 +78,6 @@ impl FromIterator<(Status, &'static str, &'static str)> for TodoList {
 /// Check the event handling at the bottom to see how to change the state on incoming events. Check
 /// the drawing logic for items on how to specify the highlighting style for selected items.
 impl App {
-
     pub fn toggle_cursor_visibility(&mut self) {
         self.cursor_visible = !self.cursor_visible;
     }
@@ -114,7 +113,9 @@ impl App {
             self.current_mode = Mode::Editing;
             let mut task = self.todo_list.items[selected].clone();
             // Initialize due_date_temp with the existing due_date if present
-            task.due_date_temp = task.due_date.map(|date| date.format("%Y-%m-%d").to_string());
+            task.due_date_temp = task
+                .due_date
+                .map(|date| date.format("%Y-%m-%d").to_string());
             self.editing_task = Some(task);
             self.current_editing_field = EditingField::TaskName;
         }
@@ -134,15 +135,15 @@ impl App {
             match self.current_editing_field {
                 EditingField::TaskName => editing_task.todo.push(c),
                 EditingField::Description => editing_task.info.push(c),
-                EditingField::DueDate => { 
+                EditingField::DueDate => {
                     if let Some(due_date) = &mut editing_task.due_date_temp {
-                        if due_date.len() < 10 && (c.is_digit(10) || c == '-') {
+                        if due_date.len() < 10 && (c.is_ascii_digit() || c == '-') {
                             due_date.push(c);
                         }
                     } else {
                         editing_task.due_date_temp = Some(c.to_string());
                     }
-                },
+                }
                 EditingField::Tags => editing_task.tags.push(c.to_string()),
             }
         }
@@ -151,14 +152,20 @@ impl App {
     pub fn backspace_field_input(&mut self) {
         if let Some(editing_task) = &mut self.editing_task {
             match self.current_editing_field {
-                EditingField::TaskName => { editing_task.todo.pop(); },
-                EditingField::Description => { editing_task.info.pop(); },
-                EditingField::DueDate => { 
+                EditingField::TaskName => {
+                    editing_task.todo.pop();
+                }
+                EditingField::Description => {
+                    editing_task.info.pop();
+                }
+                EditingField::DueDate => {
                     if let Some(due_date_temp) = &mut editing_task.due_date_temp {
                         due_date_temp.pop();
                     }
-                },
-                EditingField::Tags => { editing_task.tags.pop(); },
+                }
+                EditingField::Tags => {
+                    editing_task.tags.pop();
+                }
             }
         }
     }
@@ -208,7 +215,7 @@ impl App {
         }
         Ok(())
     }
-    
+
     pub fn select_none(&mut self) {
         self.todo_list.state.select(None);
     }
@@ -235,6 +242,37 @@ impl App {
                 Status::Completed => Status::Todo,
                 Status::Todo => Status::Completed,
             }
+        }
+    }
+
+    // TEST UTILITY FUNCTIONS
+
+    pub fn load_test_data() -> Self {
+        // Create some mock todo items for testing purposes
+        let test_items = vec![
+            TodoItem::new(Status::Todo, "Test Task 1", "Some info about Test Task 1"),
+            TodoItem::new(Status::Todo, "Test Task 2", "Some info about Test Task 2"),
+            TodoItem::new(
+                Status::Completed,
+                "Test Task 3",
+                "Some info about Test Task 3",
+            ),
+        ];
+
+        // Initialize the TodoList with the mock items
+        let todo_list = TodoList {
+            items: test_items,
+            state: ListState::default(),
+        };
+
+        // Return the App with a test state
+        Self {
+            cursor_visible: true,
+            should_exit: false,
+            todo_list,
+            current_mode: Mode::TaskList,
+            editing_task: None,
+            current_editing_field: EditingField::TaskName,
         }
     }
 }

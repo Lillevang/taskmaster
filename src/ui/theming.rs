@@ -2,15 +2,15 @@ use ratatui::style::{Color, Modifier, Style};
 
 pub const TODO_HEADER_STYLE: Style = Style::new()
     .fg(Color::Rgb(240, 240, 240)) // Soft, warm off-white for the header text
-    .bg(Color::Rgb(34, 34, 34))    // Deep charcoal for the header background
+    .bg(Color::Rgb(34, 34, 34)) // Deep charcoal for the header background
     .add_modifier(Modifier::BOLD); // Bold for a clear, prominent header
 
 pub const NORMAL_ROW_BG: Color = Color::Rgb(45, 45, 45); // Dark, muted gray for row background
 pub const ALT_ROW_BG_COLOR: Color = Color::Rgb(50, 50, 50); // Slightly lighter gray for alternate rows
 
 pub const SELECTED_STYLE: Style = Style::new()
-    .fg(Color::Rgb(240, 240, 240)) // Same soft off-white for selected row text
-    .bg(Color::Rgb(96, 125, 139))  // Muted Slate Blue, gentle yet distinct
+    .fg(Color::Rgb(255, 255, 255)) // Brighter white for selected text
+    .bg(Color::Rgb(80, 100, 120)) // Slightly darker slate blue for more contrast
     .add_modifier(Modifier::BOLD)
     .add_modifier(Modifier::ITALIC); // Bold and italic for emphasis without overpowering
 

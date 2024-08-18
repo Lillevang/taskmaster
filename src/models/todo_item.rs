@@ -8,7 +8,7 @@ pub struct TodoItem {
     pub status: Status,
     pub due_date: Option<NaiveDate>,
     pub due_date_temp: Option<String>,
-    pub tags: Vec<String>
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -25,7 +25,7 @@ impl TodoItem {
             info: info.to_string(),
             due_date: None,
             due_date_temp: None,
-            tags: Vec::new()
+            tags: Vec::new(),
         }
     }
 

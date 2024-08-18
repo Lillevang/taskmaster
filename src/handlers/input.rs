@@ -1,6 +1,6 @@
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use crate::app::App;
 use crate::app::state::Mode;
+use crate::app::App;
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub fn handle_key(app: &mut App, key: KeyEvent) {
     match app.current_mode {
