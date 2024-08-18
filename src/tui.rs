@@ -51,6 +51,10 @@ mod tests {
 
     #[test]
     fn test_init_terminal() {
+        if std::env::var("CI").is_ok() {
+            eprintln!("Skipping terminal initialization test in CI environment.")
+            return;
+        }
         let result = init_terminal();
         assert!(result.is_ok(), "Failed to initialize terminal");
         // Normally, you would restore the terminal after this, but since we cannot directly observe
