@@ -52,7 +52,7 @@ mod tests {
     #[test]
     fn test_init_terminal() {
         if std::env::var("CI").is_ok() {
-            eprintln!("Skipping terminal initialization test in CI environment.")
+            eprintln!("Skipping terminal initialization test in CI environment.");
             return;
         }
         let result = init_terminal();
