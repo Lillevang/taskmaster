@@ -28,6 +28,7 @@ pub struct App {
     pub new_task: Option<NewTask>,
 }
 
+// TODO: Refactor this into the models module - Could also be replaced by the TodoItem struct
 pub struct NewTask {
     pub name: String,
     pub description: String,
@@ -269,24 +270,25 @@ impl App {
     pub fn save_task(&mut self) {
         if self.current_mode == Mode::Editing {
             if let Some(selected) = self.todo_list.state.selected() {
-                if let Some(editing_task) = &self.editing_task {
+                if let Some(mut editing_task) = self.editing_task.take() {
                     // Parse the due date string into NaiveDate
                     if let Some(due_date_str) = &editing_task.due_date_temp {
-                        match NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
-                            Ok(due_date) => {
-                                self.todo_list.items[selected].due_date = Some(due_date);
-                            }
-                            Err(_) => {
-                                // Handle invalid date format
-                                self.todo_list.items[selected].due_date = None;
-                            }
-                        }
+                        editing_task.due_date = Self::parse_due_date(due_date_str);
                     }
                     self.todo_list.items[selected] = editing_task.clone();
                 }
             }
             self.current_mode = Mode::TaskList;
             self.editing_task = None;
+        }
+    }
+
+    // Utility function to parse different date formats and keywords
+    fn parse_due_date(input: &str) -> Option<NaiveDate> {
+        match input.trim().to_lowercase().as_str() {
+            "today" => Some(chrono::Local::now().naive_local().date()), // Parse "today"
+            "tomorrow" => Some(chrono::Local::now().naive_local().date() + chrono::Duration::days(1)), // Parse "tomorrow"
+            _ => NaiveDate::parse_from_str(input, "%Y-%m-%d").ok(), // Try to parse as "YYYY-MM-DD"
         }
     }
 
