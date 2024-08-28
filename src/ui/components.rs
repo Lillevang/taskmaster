@@ -25,7 +25,7 @@ impl Widget for &mut App {
 
         let content_layout = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(30), Constraint::Percentage(70)].as_ref())
+            .constraints([Constraint::Percentage(25), Constraint::Percentage(75)].as_ref())
             .split(layout[0]);
 
         self.render_list(content_layout[0], buf); // Left pane for task list
@@ -33,6 +33,7 @@ impl Widget for &mut App {
         match self.current_mode {
             Mode::TaskList => self.render_selected_item(content_layout[1], buf), // Right pane for task details
             Mode::Editing => self.render_editing_item(content_layout[1], buf), // Right pane for editing
+            Mode::Creating => self.render_editing_item(content_layout[1], buf), // Right pane for creating new task
         }
 
         App::render_footer(layout[1], buf); // Footer section at the bottom
