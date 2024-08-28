@@ -287,7 +287,9 @@ impl App {
     fn parse_due_date(input: &str) -> Option<NaiveDate> {
         match input.trim().to_lowercase().as_str() {
             "today" => Some(chrono::Local::now().naive_local().date()), // Parse "today"
-            "tomorrow" => Some(chrono::Local::now().naive_local().date() + chrono::Duration::days(1)), // Parse "tomorrow"
+            "tomorrow" => {
+                Some(chrono::Local::now().naive_local().date() + chrono::Duration::days(1))
+            } // Parse "tomorrow"
             _ => NaiveDate::parse_from_str(input, "%Y-%m-%d").ok(), // Try to parse as "YYYY-MM-DD"
         }
     }
