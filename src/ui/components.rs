@@ -146,7 +146,7 @@ impl App {
             let task_name_line = if self.current_editing_field == EditingField::TaskName {
                 let cursor = if self.cursor_visible { "|" } else { " " };
                 Line::from(vec![
-                    Span::raw("Task: "),
+                    Span::raw("> Task: "),
                     Span::raw(&editing_task.todo),
                     Span::styled(cursor, cursor_style),
                 ])
@@ -158,7 +158,7 @@ impl App {
             let description_line = if self.current_editing_field == EditingField::Description {
                 let cursor = if self.cursor_visible { "|" } else { " " };
                 Line::from(vec![
-                    Span::raw("Description: "),
+                    Span::raw("> Description: "),
                     Span::raw(&editing_task.info),
                     Span::styled(cursor, cursor_style),
                 ])
@@ -177,7 +177,7 @@ impl App {
             let due_date_line = if self.current_editing_field == EditingField::DueDate {
                 let cursor = if self.cursor_visible { "|" } else { " " };
                 Line::from(vec![
-                    Span::raw("Due Date: "),
+                    Span::raw("> Due Date: "),
                     Span::raw(due_date_text),
                     Span::styled(cursor, cursor_style),
                 ])
@@ -189,7 +189,7 @@ impl App {
             let tags_line = if self.current_editing_field == EditingField::Tags {
                 let cursor = if self.cursor_visible { "|" } else { " " };
                 Line::from(vec![
-                    Span::raw("Tags: "),
+                    Span::raw("> Tags: "),
                     Span::raw(editing_task.tags.join(", ")),
                     Span::styled(cursor, cursor_style),
                 ])
