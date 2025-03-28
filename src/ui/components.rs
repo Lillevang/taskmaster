@@ -185,21 +185,31 @@ impl App {
                 Line::from(vec![Span::raw("Due Date: "), Span::raw(due_date_text)])
             };
 
-            // Tags field with cursor if active
-            let tags_line = if self.current_editing_field == EditingField::Tags {
-                let cursor = if self.cursor_visible { "|" } else { " " };
-                Line::from(vec![
-                    Span::raw("> Tags: "),
-                    Span::raw(editing_task.tags.join(", ")),
-                    Span::styled(cursor, cursor_style),
-                ])
+            // Tags field with real-time `tag_temp` rendering
+        let tags_line = if self.current_editing_field == EditingField::Tags {
+            let cursor = if self.cursor_visible { "|" } else { " " };
+
+            // Combine existing tags with the ongoing input
+            let combined_tags = if !self.tag_temp.is_empty() {
+                let mut all_tags = editing_task.tags.join(", ");
+                if !all_tags.is_empty() {
+                    all_tags.push_str(", ");
+                }
+                all_tags.push_str(&self.tag_temp); // Include ongoing input
+                all_tags
             } else {
-                Line::from(vec![
-                    Span::raw("Tags: "),
-                    Span::raw(editing_task.tags.join(", ")),
-                ])
+                editing_task.tags.join(", ") // Only display existing tags if `tag_temp` is empty
             };
 
+            Line::from(vec![
+                Span::raw("> Tags: "),
+                Span::raw(combined_tags),
+                Span::styled(cursor, cursor_style),
+            ])
+        } else {
+            let tags_display = editing_task.tags.join(", ");
+            Line::from(vec![Span::raw("Tags: "), Span::raw(tags_display)])
+        };
             // Combine all lines into a Text object
             let info = Text::from(vec![
                 task_name_line,

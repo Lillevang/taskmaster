@@ -25,16 +25,7 @@ pub struct App {
     pub current_mode: Mode,
     pub editing_task: Option<TodoItem>,
     pub current_editing_field: EditingField,
-    pub new_task: Option<NewTask>,
-}
-
-// TODO: Refactor this into the models module - Could also be replaced by the TodoItem struct
-pub struct NewTask {
-    pub name: String,
-    pub description: String,
-    pub due_date: Option<NaiveDate>,
-    pub due_date_temp: Option<String>,
-    pub tags: Vec<String>,
+    pub tag_temp: String,
 }
 
 pub struct TodoList {
@@ -67,13 +58,7 @@ impl Default for App {
             current_mode: Mode::TaskList,
             editing_task: None,
             current_editing_field: EditingField::TaskName,
-            new_task: Some(NewTask {
-                name: String::new(),
-                description: String::new(),
-                due_date: None,
-                due_date_temp: None,
-                tags: Vec::new(),
-            }), // Initialize with an empty new task
+            tag_temp: String::new(),
         }
     }
 }
@@ -113,13 +98,7 @@ impl App {
                 current_mode: Mode::TaskList,
                 editing_task: None,
                 current_editing_field: EditingField::TaskName,
-                new_task: Some(NewTask {
-                    name: String::new(),
-                    description: String::new(),
-                    due_date: None,
-                    due_date_temp: None,
-                    tags: Vec::new(),
-                }),
+                tag_temp: String::new(),
             },
             Err(_) => Self::default(),
         }
@@ -198,70 +177,48 @@ impl App {
     }
 
     pub fn editing_field_input(&mut self, c: char) {
-        match self.current_editing_field {
-            EditingField::TaskName => {
-                if let Some(task) = &mut self.editing_task {
-                    task.todo.push(c);
-                } else if let Some(new_task) = &mut self.new_task {
-                    new_task.name.push(c);
+        if let Some(task) = &mut self.editing_task {
+            match self.current_editing_field {
+                EditingField::TaskName => {
+                    task.todo.push(c); // Push characters to task name
                 }
-            }
-            EditingField::Description => {
-                if let Some(task) = &mut self.editing_task {
-                    task.info.push(c);
-                } else if let Some(new_task) = &mut self.new_task {
-                    new_task.description.push(c);
+                EditingField::Description => {
+                    task.info.push(c); // Push characters to description
                 }
-            }
-            EditingField::DueDate => {
-                if let Some(task) = &mut self.editing_task {
-                    task.due_date_temp.get_or_insert(String::new()).push(c);
-                } else if let Some(new_task) = &mut self.new_task {
-                    new_task.due_date_temp.get_or_insert(String::new()).push(c);
+                EditingField::DueDate => {
+                    task.due_date_temp.get_or_insert(String::new()).push(c); // Push characters to temporary due date
                 }
-            }
-            EditingField::Tags => {
-                if let Some(task) = &mut self.editing_task {
-                    task.tags.push(c.to_string());
-                } else if let Some(new_task) = &mut self.new_task {
-                    new_task.tags.push(c.to_string());
+                EditingField::Tags => {
+                    if c == ' ' || c == ',' { // Check for delimiter
+                        if !self.tag_temp.trim().is_empty() {
+                            task.tags.push(self.tag_temp.trim().to_string());
+                        }
+                        self.tag_temp.clear(); // Clear buffer for next tag
+                    } else {
+                        self.tag_temp.push(c); // Accumulate characters for the current tag
+                    }
                 }
             }
         }
     }
 
     pub fn backspace_field_input(&mut self) {
-        match self.current_editing_field {
-            EditingField::TaskName => {
-                if let Some(task) = &mut self.editing_task {
-                    task.todo.pop();
-                } else if let Some(new_task) = &mut self.new_task {
-                    new_task.name.pop();
+        if let Some(task) = &mut self.editing_task {
+            match self.current_editing_field {
+                EditingField::TaskName => {
+                    task.todo.pop(); // Remove last character from task name
                 }
-            }
-            EditingField::Description => {
-                if let Some(task) = &mut self.editing_task {
-                    task.info.pop();
-                } else if let Some(new_task) = &mut self.new_task {
-                    new_task.description.pop();
+                EditingField::Description => {
+                    task.info.pop(); // Remove last character from description
                 }
-            }
-            EditingField::DueDate => {
-                if let Some(task) = &mut self.editing_task {
+                EditingField::DueDate => {
                     if let Some(ref mut due_date_temp) = task.due_date_temp {
-                        due_date_temp.pop();
-                    }
-                } else if let Some(new_task) = &mut self.new_task {
-                    if let Some(ref mut due_date_temp) = new_task.due_date_temp {
-                        due_date_temp.pop();
+                        due_date_temp.pop(); // Remove last character from temporary due date
                     }
                 }
-            }
-            EditingField::Tags => {
-                if let Some(task) = &mut self.editing_task {
-                    task.tags.pop();
-                } else if let Some(new_task) = &mut self.new_task {
-                    new_task.tags.pop();
+                EditingField::Tags => {
+                    // Remove the last character from the tag_temp buffer
+                    self.tag_temp.pop();
                 }
             }
         }
@@ -278,8 +235,17 @@ impl App {
                     self.todo_list.items[selected] = editing_task.clone();
                 }
             }
+
+            // Persist the updated state to the localfile
+            if let Err(e) = self.save() {
+                eprintln!("Failed to save the updated state: {}", e);
+            }
+
+            // Switch back to TaskList mode
             self.current_mode = Mode::TaskList;
+            self.current_editing_field = EditingField::TaskName;
             self.editing_task = None;
+            self.tag_temp.clear();
         }
     }
 
@@ -373,13 +339,7 @@ impl App {
             current_mode: Mode::TaskList,
             editing_task: None,
             current_editing_field: EditingField::TaskName,
-            new_task: Some(NewTask {
-                name: String::new(),
-                description: String::new(),
-                due_date: None,
-                due_date_temp: None,
-                tags: Vec::new(),
-            }),
+            tag_temp: String::new(),
         }
     }
 }

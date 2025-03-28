@@ -50,11 +50,12 @@ fn handle_editing_input(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_creation_input(app: &mut App, key: KeyEvent) {
-    if let Some(_new_task) = &mut app.new_task {
+    // Ensure we are in the creation mode and have an active editing task
+    if app.current_mode == Mode::Creating {
         match key.code {
             KeyCode::Esc => app.cancel_editing(),
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                app.save_new_task()
+                app.save_new_task(); // Save the new task
             }
             KeyCode::Char(c) => {
                 // Handle text input for the currently selected field
