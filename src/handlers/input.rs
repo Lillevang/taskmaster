@@ -7,11 +7,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         Mode::TaskList => handle_task_list_input(app, key),
         Mode::Editing => handle_editing_input(app, key),
         Mode::Creating => handle_creation_input(app, key),
+        Mode::Command => handle_command_input(app, key),
     }
 }
 
 fn handle_task_list_input(app: &mut App, key: KeyEvent) {
     match key.code {
+        KeyCode::Char(':') => app.enter_command_mode(),
         KeyCode::Char('n') => app.create_new_task(),
         KeyCode::Char('e') => app.enter_editing_mode(),
         KeyCode::Char('q') | KeyCode::Esc => app.should_exit = true,
@@ -22,6 +24,18 @@ fn handle_task_list_input(app: &mut App, key: KeyEvent) {
         KeyCode::Char(' ') | KeyCode::Char('l') | KeyCode::Enter => app.toggle_status(),
         KeyCode::Delete if key.modifiers.contains(KeyModifiers::CONTROL) => {
             app.delete_selected_task()
+        }
+        _ => {}
+    }
+}
+
+fn handle_command_input(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Enter => app.handle_command(),
+        KeyCode::Esc => app.exit_command_mode(),
+        KeyCode::Char(c) => app.command_buffer.push(c),
+        KeyCode::Backspace => {
+            app.command_buffer.pop();
         }
         _ => {}
     }

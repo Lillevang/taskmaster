@@ -26,6 +26,7 @@ pub struct App {
     pub editing_task: Option<TodoItem>,
     pub current_editing_field: EditingField,
     pub tag_temp: String,
+    pub command_buffer: String,
 }
 
 pub struct TodoList {
@@ -37,6 +38,7 @@ pub enum Mode {
     TaskList,
     Editing,
     Creating,
+    Command,
 }
 
 impl Default for App {
@@ -59,6 +61,7 @@ impl Default for App {
             editing_task: None,
             current_editing_field: EditingField::TaskName,
             tag_temp: String::new(),
+            command_buffer: String::new(),
         }
     }
 }
@@ -99,6 +102,7 @@ impl App {
                 editing_task: None,
                 current_editing_field: EditingField::TaskName,
                 tag_temp: String::new(),
+                command_buffer: String::new(),
             },
             Err(_) => Self::default(),
         }
@@ -189,7 +193,8 @@ impl App {
                     task.due_date_temp.get_or_insert(String::new()).push(c); // Push characters to temporary due date
                 }
                 EditingField::Tags => {
-                    if c == ' ' || c == ',' { // Check for delimiter
+                    if c == ' ' || c == ',' {
+                        // Check for delimiter
                         if !self.tag_temp.trim().is_empty() {
                             task.tags.push(self.tag_temp.trim().to_string());
                         }
@@ -340,6 +345,35 @@ impl App {
             editing_task: None,
             current_editing_field: EditingField::TaskName,
             tag_temp: String::new(),
+            command_buffer: String::new(),
         }
+    }
+
+    pub fn enter_command_mode(&mut self) {
+        self.current_mode = Mode::Command;
+        self.command_buffer.clear();
+    }
+
+    pub fn exit_command_mode(&mut self) {
+        self.current_mode = Mode::TaskList;
+        self.command_buffer.clear();
+    }
+
+    pub fn handle_command(&mut self) {
+        match self.command_buffer.as_str() {
+            ":q" | ":quit" => self.should_exit = true,
+            ":w" | ":write" => {
+                if let Err(e) = self.save() {
+                    eprintln!("Failed to save: {}", e);
+                }
+            }
+            ":help" => {
+                // TODO: Implement help display
+            }
+            _ => {
+                // Unknown command
+            }
+        }
+        self.exit_command_mode();
     }
 }

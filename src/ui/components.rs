@@ -34,9 +34,14 @@ impl Widget for &mut App {
             Mode::TaskList => self.render_selected_item(content_layout[1], buf), // Right pane for task details
             Mode::Editing => self.render_editing_item(content_layout[1], buf), // Right pane for editing
             Mode::Creating => self.render_editing_item(content_layout[1], buf), // Right pane for creating new task
+            Mode::Command => self.render_selected_item(content_layout[1], buf), // Keep showing selected item in command mode
         }
 
-        App::render_footer(layout[1], buf); // Footer section at the bottom
+        // Render footer or command input based on mode
+        match self.current_mode {
+            Mode::Command => self.render_command_input(layout[1], buf),
+            _ => App::render_footer(layout[1], buf),
+        }
     }
 }
 
@@ -186,30 +191,30 @@ impl App {
             };
 
             // Tags field with real-time `tag_temp` rendering
-        let tags_line = if self.current_editing_field == EditingField::Tags {
-            let cursor = if self.cursor_visible { "|" } else { " " };
+            let tags_line = if self.current_editing_field == EditingField::Tags {
+                let cursor = if self.cursor_visible { "|" } else { " " };
 
-            // Combine existing tags with the ongoing input
-            let combined_tags = if !self.tag_temp.is_empty() {
-                let mut all_tags = editing_task.tags.join(", ");
-                if !all_tags.is_empty() {
-                    all_tags.push_str(", ");
-                }
-                all_tags.push_str(&self.tag_temp); // Include ongoing input
-                all_tags
+                // Combine existing tags with the ongoing input
+                let combined_tags = if !self.tag_temp.is_empty() {
+                    let mut all_tags = editing_task.tags.join(", ");
+                    if !all_tags.is_empty() {
+                        all_tags.push_str(", ");
+                    }
+                    all_tags.push_str(&self.tag_temp); // Include ongoing input
+                    all_tags
+                } else {
+                    editing_task.tags.join(", ") // Only display existing tags if `tag_temp` is empty
+                };
+
+                Line::from(vec![
+                    Span::raw("> Tags: "),
+                    Span::raw(combined_tags),
+                    Span::styled(cursor, cursor_style),
+                ])
             } else {
-                editing_task.tags.join(", ") // Only display existing tags if `tag_temp` is empty
+                let tags_display = editing_task.tags.join(", ");
+                Line::from(vec![Span::raw("Tags: "), Span::raw(tags_display)])
             };
-
-            Line::from(vec![
-                Span::raw("> Tags: "),
-                Span::raw(combined_tags),
-                Span::styled(cursor, cursor_style),
-            ])
-        } else {
-            let tags_display = editing_task.tags.join(", ");
-            Line::from(vec![Span::raw("Tags: "), Span::raw(tags_display)])
-        };
             // Combine all lines into a Text object
             let info = Text::from(vec![
                 task_name_line,
@@ -224,5 +229,15 @@ impl App {
                 .wrap(Wrap { trim: false })
                 .render(area, buf);
         }
+    }
+
+    fn render_command_input(&self, area: Rect, buf: &mut Buffer) {
+        let cursor = if self.cursor_visible { "|" } else { " " };
+        let command_text = format!(":{}", self.command_buffer);
+        let text = format!("{}{}", command_text, cursor);
+
+        Paragraph::new(text)
+            .style(Style::default().fg(TEXT_FG_COLOR))
+            .render(area, buf);
     }
 }
