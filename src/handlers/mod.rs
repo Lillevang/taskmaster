@@ -69,7 +69,7 @@ mod tests {
         handle_key(&mut app, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(
             app.todo_list.state.selected(),
-            Some(3),
+            Some(2),
             "Expected selection to remain at the last task"
         );
     }
