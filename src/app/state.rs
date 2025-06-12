@@ -18,6 +18,12 @@ pub enum EditingField {
     Tags,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConfirmationState {
+    None,
+    Delete,
+}
+
 pub struct App {
     pub cursor_visible: bool,
     pub should_exit: bool,
@@ -27,18 +33,25 @@ pub struct App {
     pub current_editing_field: EditingField,
     pub tag_temp: String,
     pub command_buffer: String,
+    pub confirmation_state: ConfirmationState,
+    pub show_archived: bool,
 }
 
 pub struct TodoList {
-    pub items: Vec<TodoItem>,
+    pub active_items: Vec<TodoItem>,
+    pub archived_items: Vec<TodoItem>,
     pub state: ListState,
+    pub selected_indices: Vec<usize>,
+    pub show_archived: bool,
 }
+
 #[derive(PartialEq, Debug, Clone, Copy, Eq)]
 pub enum Mode {
     TaskList,
     Editing,
     Creating,
     Command,
+    Help,
 }
 
 impl Default for App {
@@ -62,18 +75,44 @@ impl Default for App {
             current_editing_field: EditingField::TaskName,
             tag_temp: String::new(),
             command_buffer: String::new(),
+            confirmation_state: ConfirmationState::None,
+            show_archived: false,
+        }
+    }
+}
+
+impl Default for TodoList {
+    fn default() -> Self {
+        Self {
+            active_items: Vec::new(),
+            archived_items: Vec::new(),
+            state: ListState::default(),
+            selected_indices: Vec::new(),
+            show_archived: false,
         }
     }
 }
 
 impl FromIterator<(Status, &'static str, &'static str)> for TodoList {
     fn from_iter<I: IntoIterator<Item = (Status, &'static str, &'static str)>>(iter: I) -> Self {
-        let items = iter
-            .into_iter()
-            .map(|(status, todo, info)| TodoItem::new(status, todo, info))
-            .collect();
-        let state = ListState::default();
-        Self { items, state }
+        let mut active_items = Vec::new();
+        let mut archived_items = Vec::new();
+
+        for (status, todo, info) in iter {
+            let item = TodoItem::new(status, todo, info);
+            match item.status {
+                Status::Archived => archived_items.push(item),
+                _ => active_items.push(item),
+            }
+        }
+
+        Self {
+            active_items,
+            archived_items,
+            state: ListState::default(),
+            selected_indices: Vec::new(),
+            show_archived: false,
+        }
     }
 }
 
@@ -91,19 +130,36 @@ impl App {
     pub fn load_or_default() -> Self {
         let storage_path = get_default_storage_path();
         match load_from_file(&storage_path) {
-            Ok(todo_data) => Self {
-                cursor_visible: true,
-                should_exit: false,
-                todo_list: TodoList {
-                    items: todo_data.items,
-                    state: ListState::default(),
-                },
-                current_mode: Mode::TaskList,
-                editing_task: None,
-                current_editing_field: EditingField::TaskName,
-                tag_temp: String::new(),
-                command_buffer: String::new(),
-            },
+            Ok(todo_data) => {
+                let mut active_items = Vec::new();
+                let mut archived_items = Vec::new();
+
+                for item in todo_data.items {
+                    match item.status {
+                        Status::Archived => archived_items.push(item),
+                        _ => active_items.push(item),
+                    }
+                }
+
+                Self {
+                    cursor_visible: true,
+                    should_exit: false,
+                    todo_list: TodoList {
+                        active_items,
+                        archived_items,
+                        state: ListState::default(),
+                        selected_indices: Vec::new(),
+                        show_archived: false,
+                    },
+                    current_mode: Mode::TaskList,
+                    editing_task: None,
+                    current_editing_field: EditingField::TaskName,
+                    tag_temp: String::new(),
+                    command_buffer: String::new(),
+                    confirmation_state: ConfirmationState::None,
+                    show_archived: false,
+                }
+            }
             Err(_) => Self::default(),
         }
     }
@@ -111,7 +167,7 @@ impl App {
     pub fn save(&self) -> io::Result<()> {
         let storage_path = get_default_storage_path();
         let todo_data = TodoData {
-            items: self.todo_list.items.clone(),
+            items: [&self.todo_list.active_items[..], &self.todo_list.archived_items[..]].concat(),
         };
         save_to_file(&storage_path, &todo_data)
     }
@@ -135,7 +191,7 @@ impl App {
     pub fn save_new_task(&mut self) {
         if let Some(new_task) = self.editing_task.take() {
             // Add the new task to the list
-            self.todo_list.items.push(new_task);
+            self.todo_list.active_items.push(new_task);
             self.current_mode = Mode::TaskList;
 
             // Select the newly added task
@@ -145,10 +201,17 @@ impl App {
 
     pub fn delete_selected_task(&mut self) {
         if let Some(selected) = self.todo_list.state.selected() {
-            // Remove the task from current state
-            self.todo_list.items.remove(selected);
+            if self.todo_list.show_archived {
+                if selected < self.todo_list.archived_items.len() {
+                    self.todo_list.archived_items.remove(selected);
+                }
+            } else {
+                if selected < self.todo_list.active_items.len() {
+                    self.todo_list.active_items.remove(selected);
+                }
+            }
 
-            // Reset the selected state to avaoid out-of-bounds selections
+            // Reset the selected state to avoid out-of-bounds selections
             self.todo_list.state.select_first();
 
             // Persist the updated state to the localfile
@@ -161,7 +224,7 @@ impl App {
     pub fn enter_editing_mode(&mut self) {
         if let Some(selected) = self.todo_list.state.selected() {
             self.current_mode = Mode::Editing;
-            let mut task = self.todo_list.items[selected].clone();
+            let mut task = self.todo_list.active_items[selected].clone();
             // Initialize due_date_temp with the existing due_date if present
             task.due_date_temp = task
                 .due_date
@@ -237,7 +300,7 @@ impl App {
                     if let Some(due_date_str) = &editing_task.due_date_temp {
                         editing_task.due_date = Self::parse_due_date(due_date_str);
                     }
-                    self.todo_list.items[selected] = editing_task.clone();
+                    self.todo_list.active_items[selected] = editing_task.clone();
                 }
             }
 
@@ -309,11 +372,19 @@ impl App {
     /// Changes the status of the selected list item
     pub fn toggle_status(&mut self) {
         if let Some(i) = self.todo_list.state.selected() {
-            self.todo_list.items[i].status = match self.todo_list.items[i].status {
-                Status::Completed => Status::Todo,
+            self.todo_list.active_items[i].status = match self.todo_list.active_items[i].status {
                 Status::Todo => Status::Completed,
+                Status::Completed => Status::Todo,
+                Status::Archived => Status::Todo,
             }
         }
+    }
+
+    pub fn toggle_archive_visibility(&mut self) {
+        self.show_archived = !self.show_archived;
+        // Reset selection when switching lists
+        self.clear_selection();
+        self.todo_list.state.select_first();
     }
 
     // TEST UTILITY FUNCTIONS
@@ -332,8 +403,11 @@ impl App {
 
         // Initialize the TodoList with the mock items
         let todo_list = TodoList {
-            items: test_items,
+            active_items: test_items,
+            archived_items: Vec::new(),
             state: ListState::default(),
+            selected_indices: Vec::new(),
+            show_archived: false,
         };
 
         // Return the App with a test state
@@ -346,6 +420,8 @@ impl App {
             current_editing_field: EditingField::TaskName,
             tag_temp: String::new(),
             command_buffer: String::new(),
+            confirmation_state: ConfirmationState::None,
+            show_archived: false,
         }
     }
 
@@ -359,21 +435,303 @@ impl App {
         self.command_buffer.clear();
     }
 
-    pub fn handle_command(&mut self) {
-        match self.command_buffer.as_str() {
-            ":q" | ":quit" => self.should_exit = true,
-            ":w" | ":write" => {
-                if let Err(e) = self.save() {
-                    eprintln!("Failed to save: {}", e);
+    pub fn archive_selected_task(&mut self) {
+        if let Some(selected) = self.todo_list.state.selected() {
+            if !self.todo_list.show_archived {
+                if selected < self.todo_list.active_items.len() {
+                    let item = self.todo_list.active_items.remove(selected);
+                    self.todo_list.archived_items.push(item);
+                    if let Err(e) = self.save() {
+                        eprintln!("Failed to save after archiving: {}", e);
+                    }
                 }
             }
-            ":help" => {
-                // TODO: Implement help display
-            }
-            _ => {
-                // Unknown command
+        }
+    }
+
+    pub fn unarchive_selected_task(&mut self) {
+        if let Some(selected) = self.todo_list.state.selected() {
+            if self.todo_list.show_archived {
+                if selected < self.todo_list.archived_items.len() {
+                    let item = self.todo_list.archived_items.remove(selected);
+                    self.todo_list.active_items.push(item);
+                    if let Err(e) = self.save() {
+                        eprintln!("Failed to save after unarchiving: {}", e);
+                    }
+                }
             }
         }
-        self.exit_command_mode();
+    }
+
+    pub fn request_delete_confirmation(&mut self) {
+        self.confirmation_state = ConfirmationState::Delete;
+    }
+
+    pub fn confirm_delete(&mut self) {
+        if self.confirmation_state == ConfirmationState::Delete {
+            self.delete_selected_task();
+            self.confirmation_state = ConfirmationState::None;
+        }
+    }
+
+    pub fn cancel_delete(&mut self) {
+        self.confirmation_state = ConfirmationState::None;
+    }
+
+    pub fn toggle_selection(&mut self) {
+        if let Some(selected) = self.todo_list.state.selected() {
+            if self.todo_list.selected_indices.contains(&selected) {
+                // Remove from selection
+                self.todo_list.selected_indices.retain(|&i| i != selected);
+            } else {
+                // Add to selection
+                self.todo_list.selected_indices.push(selected);
+            }
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.todo_list.selected_indices.clear();
+    }
+
+    pub fn archive_selected_tasks(&mut self) {
+        let indices = if self.todo_list.selected_indices.is_empty() {
+            if let Some(selected) = self.todo_list.state.selected() {
+                vec![selected]
+            } else {
+                vec![]
+            }
+        } else {
+            self.todo_list.selected_indices.clone()
+        };
+
+        // Move selected completed items to archived list
+        let mut items_to_move = Vec::new();
+        for &i in &indices {
+            if i < self.todo_list.active_items.len() {
+                if self.todo_list.active_items[i].status == Status::Completed {
+                    items_to_move.push(i);
+                }
+            }
+        }
+
+        // Remove from active list and add to archived list
+        for &i in items_to_move.iter().rev() {
+            let item = self.todo_list.active_items.remove(i);
+            self.todo_list.archived_items.push(item);
+        }
+
+        // Clear selection after archiving
+        self.clear_selection();
+        
+        // Update list state
+        if let Some(selected) = self.todo_list.state.selected() {
+            if selected >= self.get_visible_tasks().len() {
+                self.todo_list.state.select(Some(self.get_visible_tasks().len().saturating_sub(1)));
+            }
+        }
+        
+        if let Err(e) = self.save() {
+            eprintln!("Failed to save after archiving: {}", e);
+        }
+    }
+
+    pub fn archive_all_completed(&mut self) {
+        self.todo_list.archive_all_completed();
+        if let Err(e) = self.save() {
+            eprintln!("Failed to save after archiving all completed: {}", e);
+        }
+    }
+
+    pub fn handle_command(&mut self, cmd: &str) -> Result<(), String> {
+        let parts: Vec<&str> = cmd.split_whitespace().collect();
+        if parts.is_empty() {
+            return Ok(());
+        }
+
+        match parts[0].to_lowercase().as_str() {
+            "add" | "a" | "+" => {
+                if parts.len() < 2 {
+                    return Err("Usage: add <task description>".to_string());
+                }
+                let description = parts[1..].join(" ");
+                self.todo_list.add_task(description);
+                Ok(())
+            }
+            "delete" | "d" | "del" | "-" => {
+                if parts.len() < 2 {
+                    return Err("Usage: delete <task number>".to_string());
+                }
+                if let Ok(index) = parts[1].parse::<usize>() {
+                    if index == 0 {
+                        return Err("Task numbers start from 1".to_string());
+                    }
+                    self.todo_list.delete_task(index - 1);
+                    Ok(())
+                } else {
+                    Err("Invalid task number".to_string())
+                }
+            }
+            "complete" | "c" | "done" | "✓" => {
+                if parts.len() < 2 {
+                    return Err("Usage: complete <task number>".to_string());
+                }
+                if let Ok(index) = parts[1].parse::<usize>() {
+                    if index == 0 {
+                        return Err("Task numbers start from 1".to_string());
+                    }
+                    self.todo_list.toggle_complete(index - 1);
+                    Ok(())
+                } else {
+                    Err("Invalid task number".to_string())
+                }
+            }
+            "archive" | "ar" | ">" => {
+                if parts.len() < 2 {
+                    return Err("Usage: archive <task number>".to_string());
+                }
+                if let Ok(index) = parts[1].parse::<usize>() {
+                    if index == 0 {
+                        return Err("Task numbers start from 1".to_string());
+                    }
+                    if index > self.todo_list.active_items.len() {
+                        return Err(format!("Task number {} is out of range", index));
+                    }
+                    self.todo_list.archive_task(index - 1);
+                    Ok(())
+                } else {
+                    Err("Invalid task number".to_string())
+                }
+            }
+            "unarchive" | "uar" | "<" => {
+                if parts.len() < 2 {
+                    return Err("Usage: unarchive <task number>".to_string());
+                }
+                if let Ok(index) = parts[1].parse::<usize>() {
+                    if index == 0 {
+                        return Err("Task numbers start from 1".to_string());
+                    }
+                    if index > self.todo_list.archived_items.len() {
+                        return Err(format!("Task number {} is out of range", index));
+                    }
+                    self.todo_list.unarchive_task(index - 1);
+                    Ok(())
+                } else {
+                    Err("Invalid task number".to_string())
+                }
+            }
+            "archiveall" | "aa" | ">>" => {
+                self.todo_list.archive_all_completed();
+                Ok(())
+            }
+            "view" | "v" => {
+                if parts.len() < 2 {
+                    return Err("Usage: view <active|archived>".to_string());
+                }
+                match parts[1].to_lowercase().as_str() {
+                    "active" | "a" => {
+                        self.todo_list.show_archived = false;
+                        Ok(())
+                    }
+                    "archived" | "ar" => {
+                        self.todo_list.show_archived = true;
+                        Ok(())
+                    }
+                    _ => Err("Invalid view. Use 'active' or 'archived'".to_string()),
+                }
+            }
+            "toggle" | "t" | "~" => {
+                self.todo_list.toggle_archive_view();
+                Ok(())
+            }
+            "help" | "h" | "?" => {
+                self.current_mode = Mode::Help;
+                Ok(())
+            }
+            "quit" | "q" | "exit" => {
+                self.should_exit = true;
+                Ok(())
+            }
+            _ => Err(format!("Unknown command: {}. Type 'h' for help", parts[0])),
+        }
+    }
+
+    pub fn get_visible_tasks(&self) -> Vec<&TodoItem> {
+        if self.show_archived {
+            self.todo_list.archived_items.iter().collect()
+        } else {
+            self.todo_list.active_items.iter().collect()
+        }
+    }
+
+    pub fn get_visible_tasks_mut(&mut self) -> Vec<&mut TodoItem> {
+        if self.show_archived {
+            self.todo_list.archived_items.iter_mut().collect()
+        } else {
+            self.todo_list.active_items.iter_mut().collect()
+        }
+    }
+}
+
+impl TodoList {
+    pub fn toggle_archive_view(&mut self) {
+        self.show_archived = !self.show_archived;
+        // Reset selection when switching views
+        self.state.select(None);
+        self.selected_indices.clear();
+    }
+
+    pub fn add_task(&mut self, description: String) {
+        let new_task = TodoItem {
+            todo: description,
+            info: String::new(),
+            status: Status::Todo,
+            due_date: None,
+            tags: Vec::new(),
+            due_date_temp: None,
+        };
+        self.active_items.push(new_task);
+    }
+
+    pub fn delete_task(&mut self, index: usize) {
+        if index < self.active_items.len() {
+            self.active_items.remove(index);
+        }
+    }
+
+    pub fn toggle_complete(&mut self, index: usize) {
+        if index < self.active_items.len() {
+            self.active_items[index].status = match self.active_items[index].status {
+                Status::Todo => Status::Completed,
+                Status::Completed => Status::Todo,
+                Status::Archived => Status::Todo,
+            };
+        }
+    }
+
+    pub fn archive_task(&mut self, index: usize) {
+        if index < self.active_items.len() {
+            let item = self.active_items.remove(index);
+            self.archived_items.push(item);
+        }
+    }
+
+    pub fn unarchive_task(&mut self, index: usize) {
+        if index < self.archived_items.len() {
+            let item = self.archived_items.remove(index);
+            self.active_items.push(item);
+        }
+    }
+
+    pub fn archive_all_completed(&mut self) {
+        let mut i = 0;
+        while i < self.active_items.len() {
+            if self.active_items[i].status == Status::Completed {
+                let item = self.active_items.remove(i);
+                self.archived_items.push(item);
+            } else {
+                i += 1;
+            }
+        }
     }
 }

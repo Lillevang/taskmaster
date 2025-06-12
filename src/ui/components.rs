@@ -1,6 +1,6 @@
-use crate::app::state::{EditingField, Mode};
+use crate::app::state::{EditingField, Mode, ConfirmationState};
 use crate::app::App;
-use crate::models;
+use crate::models::{Status, TodoItem};
 use crate::ui::theming::{
     alternate_colors, COMPLETED_TEXT_FG_COLOR, NORMAL_ROW_BG, SELECTED_STYLE, TEXT_FG_COLOR,
     TODO_HEADER_STYLE,
@@ -35,11 +35,13 @@ impl Widget for &mut App {
             Mode::Editing => self.render_editing_item(content_layout[1], buf), // Right pane for editing
             Mode::Creating => self.render_editing_item(content_layout[1], buf), // Right pane for creating new task
             Mode::Command => self.render_selected_item(content_layout[1], buf), // Keep showing selected item in command mode
+            Mode::Help => self.render_help(content_layout[1], buf), // Show help information
         }
 
-        // Render footer or command input based on mode
-        match self.current_mode {
-            Mode::Command => self.render_command_input(layout[1], buf),
+        // Render footer, command input, or confirmation based on state
+        match (self.current_mode, &self.confirmation_state) {
+            (Mode::Command, _) => self.render_command_input(layout[1], buf),
+            (_, ConfirmationState::Delete) => self.render_delete_confirmation(layout[1], buf),
             _ => App::render_footer(layout[1], buf),
         }
     }
@@ -54,36 +56,59 @@ impl App {
     }
 
     fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
+        let title = if self.show_archived {
+            "ARCHIVED TASKS"
+        } else {
+            "ACTIVE TASKS"
+        };
+
         let block = Block::new()
-            .title(Line::raw("TODO List").centered())
+            .title(Line::raw(title).centered())
             .borders(Borders::ALL)
             .border_style(TODO_HEADER_STYLE)
             .style(Style::default().bg(NORMAL_ROW_BG));
 
-        // Iterate through all elements in the `items` and stylize them.
-        let items: Vec<ListItem> = self
-            .todo_list
-            .items
+        // Get visible tasks and their indices
+        let visible_tasks: Vec<(usize, &TodoItem)> = if self.show_archived {
+            self.todo_list.archived_items.iter().enumerate().collect()
+        } else {
+            self.todo_list.active_items.iter().enumerate().collect()
+        };
+
+        // Create list items from visible tasks
+        let items: Vec<ListItem> = visible_tasks
             .iter()
-            .enumerate()
             .map(|(i, todo_item)| {
-                let color = alternate_colors(i);
-                let status_symbol = if todo_item.status == models::Status::Completed {
-                    "✓"
-                } else {
-                    "☐"
-                };
+                let color = alternate_colors(*i);
+                let status_symbol = todo_item.status.symbol();
+                let is_selected = self.todo_list.selected_indices.contains(i);
+                let is_current = self.todo_list.state.selected() == Some(*i);
 
                 let content = Line::styled(
                     format!("{} {}", status_symbol, todo_item.todo),
-                    Style::default().fg(if todo_item.status == models::Status::Completed {
-                        COMPLETED_TEXT_FG_COLOR // Color for completed tasks
+                    Style::default().fg(if todo_item.status == Status::Completed {
+                        COMPLETED_TEXT_FG_COLOR
+                    } else if todo_item.status == Status::Archived {
+                        Color::DarkGray
                     } else {
                         TEXT_FG_COLOR
                     }),
                 );
 
-                ListItem::new(content).style(Style::default().bg(color))
+                let style = if is_selected {
+                    Style::default()
+                        .bg(Color::Blue)
+                        .fg(Color::White)
+                        .add_modifier(ratatui::style::Modifier::BOLD)
+                } else if is_current {
+                    Style::default()
+                        .bg(color)
+                        .add_modifier(ratatui::style::Modifier::BOLD)
+                } else {
+                    Style::default().bg(color)
+                };
+
+                ListItem::new(content).style(style)
             })
             .collect();
 
@@ -93,8 +118,6 @@ impl App {
             .highlight_symbol(">")
             .highlight_spacing(HighlightSpacing::Always);
 
-        // We need to disambiguate this trait method as both `Widget` and `StatefulWidget` share the
-        // same method name `render`.
         StatefulWidget::render(list, area, buf, &mut self.todo_list.state);
     }
 
@@ -107,10 +130,14 @@ impl App {
             .padding(Padding::horizontal(1));
 
         let info = if let Some(i) = self.todo_list.state.selected() {
-            let selected_task = &self.todo_list.items[i];
+            let selected_task = if self.show_archived {
+                &self.todo_list.archived_items[i]
+            } else {
+                &self.todo_list.active_items[i]
+            };
             format!(
                 "{}\n\nDescription:\n{}\n\n{}\n{}",
-                if selected_task.status == models::Status::Completed {
+                if selected_task.status == Status::Completed {
                     format!("✓ DONE: {}", selected_task.todo)
                 } else {
                     format!("☐ TODO: {}", selected_task.todo)
@@ -238,6 +265,56 @@ impl App {
 
         Paragraph::new(text)
             .style(Style::default().fg(TEXT_FG_COLOR))
+            .render(area, buf);
+    }
+
+    fn render_delete_confirmation(&self, area: Rect, buf: &mut Buffer) {
+        let text = "Are you sure you want to delete this task? (y/n)";
+        Paragraph::new(text)
+            .style(Style::default().fg(Color::Red))
+            .centered()
+            .render(area, buf);
+    }
+
+    fn render_help(&self, area: Rect, buf: &mut Buffer) {
+        let block = Block::new()
+            .title(Line::raw("Help").centered())
+            .borders(Borders::ALL)
+            .border_style(TODO_HEADER_STYLE)
+            .style(Style::default().bg(NORMAL_ROW_BG))
+            .padding(Padding::horizontal(1));
+
+        let help_text = vec![
+            "Navigation:",
+            "  ↑/↓ - Move selection",
+            "  g/G - Go to top/bottom",
+            "  Space - Toggle selection",
+            "  Shift+Space - Toggle status",
+            "  Enter - Toggle status",
+            "",
+            "Commands:",
+            "  : - Enter command mode",
+            "  add <task> - Add new task",
+            "  delete <n> - Delete task n",
+            "  complete <n> - Complete task n",
+            "  archive <n> - Archive task n",
+            "  unarchive <n> - Unarchive task n",
+            "  archiveall - Archive all completed",
+            "  view active/archived - Switch view",
+            "  toggle - Toggle between views",
+            "",
+            "Other:",
+            "  n - Create new task",
+            "  e - Edit selected task",
+            "  Ctrl+D - Delete selected task",
+            "  q - Quit",
+            "  Esc - Cancel/exit mode",
+        ].join("\n");
+
+        Paragraph::new(help_text)
+            .block(block)
+            .style(Style::default().fg(TEXT_FG_COLOR))
+            .wrap(Wrap { trim: false })
             .render(area, buf);
     }
 }

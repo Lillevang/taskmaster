@@ -1,4 +1,4 @@
-use crate::app::state::Mode;
+use crate::app::state::{Mode, ConfirmationState};
 use crate::app::App;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -8,10 +8,23 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
         Mode::Editing => handle_editing_input(app, key),
         Mode::Creating => handle_creation_input(app, key),
         Mode::Command => handle_command_input(app, key),
+        Mode::Help => handle_help_input(app, key),
     }
 }
 
 fn handle_task_list_input(app: &mut App, key: KeyEvent) {
+    match app.confirmation_state {
+        ConfirmationState::Delete => {
+            match key.code {
+                KeyCode::Char('y') => app.confirm_delete(),
+                KeyCode::Char('n') | KeyCode::Esc => app.cancel_delete(),
+                _ => {}
+            }
+            return;
+        }
+        _ => {}
+    }
+
     match key.code {
         KeyCode::Char(':') => app.enter_command_mode(),
         KeyCode::Char('n') => app.create_new_task(),
@@ -21,19 +34,109 @@ fn handle_task_list_input(app: &mut App, key: KeyEvent) {
         KeyCode::Down => app.select_next(),
         KeyCode::Char('g') => app.select_first(),
         KeyCode::Char('G') => app.select_last(),
-        KeyCode::Char(' ') | KeyCode::Char('l') | KeyCode::Enter => app.toggle_status(),
+        KeyCode::Char(' ') => {
+            if key.modifiers.contains(KeyModifiers::SHIFT) {
+                app.toggle_status();
+            } else {
+                app.toggle_selection();
+            }
+        },
+        KeyCode::Char('E') => app.clear_selection(),
+        KeyCode::Char('l') | KeyCode::Enter => app.toggle_status(),
         KeyCode::Delete if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.delete_selected_task()
-        }
+            app.request_delete_confirmation()
+        },
+        KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.create_new_task();
+        },
+        KeyCode::Char('h') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.current_mode = Mode::Help;
+        },
+        KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.todo_list.toggle_archive_view();
+        },
+        KeyCode::Char('>') => {
+            if let Some(selected) = app.todo_list.state.selected() {
+                app.todo_list.archive_task(selected);
+            }
+        },
+        KeyCode::Char('<') => {
+            if let Some(selected) = app.todo_list.state.selected() {
+                app.todo_list.unarchive_task(selected);
+            }
+        },
+        KeyCode::Char('A') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            app.todo_list.archive_all_completed();
+        },
+        _ => {}
+    }
+}
+
+fn handle_help_input(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => app.current_mode = Mode::TaskList,
         _ => {}
     }
 }
 
 fn handle_command_input(app: &mut App, key: KeyEvent) {
     match key.code {
-        KeyCode::Enter => app.handle_command(),
+        KeyCode::Enter => {
+            let cmd = app.command_buffer.clone();
+            if let Err(e) = app.handle_command(&cmd) {
+                // Show error in the command line
+                app.command_buffer = format!("Error: {}", e);
+            } else {
+                app.exit_command_mode();
+            }
+        }
         KeyCode::Esc => app.exit_command_mode(),
-        KeyCode::Char(c) => app.command_buffer.push(c),
+        KeyCode::Char(c) => {
+            // Handle special command shortcuts
+            match c {
+                'q' => {
+                    app.should_exit = true;
+                    return;
+                }
+                'h' => {
+                    app.current_mode = Mode::Help;
+                    return;
+                }
+                't' => {
+                    app.todo_list.toggle_archive_view();
+                    app.exit_command_mode();
+                    return;
+                }
+                'a' => {
+                    app.create_new_task();
+                    return;
+                }
+                'e' => {
+                    app.enter_editing_mode();
+                    return;
+                }
+                '>' => {
+                    if let Some(selected) = app.todo_list.state.selected() {
+                        app.todo_list.archive_task(selected);
+                        app.exit_command_mode();
+                    }
+                    return;
+                }
+                '<' => {
+                    if let Some(selected) = app.todo_list.state.selected() {
+                        app.todo_list.unarchive_task(selected);
+                        app.exit_command_mode();
+                    }
+                    return;
+                }
+                'A' => {
+                    app.todo_list.archive_all_completed();
+                    app.exit_command_mode();
+                    return;
+                }
+                _ => app.command_buffer.push(c),
+            }
+        }
         KeyCode::Backspace => {
             app.command_buffer.pop();
         }

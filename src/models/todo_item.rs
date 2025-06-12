@@ -15,6 +15,17 @@ pub struct TodoItem {
 pub enum Status {
     Todo,
     Completed,
+    Archived,
+}
+
+impl Status {
+    pub fn symbol(&self) -> &'static str {
+        match self {
+            Status::Todo => "☐",
+            Status::Completed => "✓",
+            Status::Archived => "📦",
+        }
+    }
 }
 
 impl TodoItem {
