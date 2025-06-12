@@ -292,18 +292,54 @@ impl App {
     }
 
     pub fn select_next(&mut self) {
-        self.todo_list.state.select_next();
+        if self.todo_list.items.is_empty() {
+            self.todo_list.state.select(None);
+            return;
+        }
+
+        let next_index = match self.todo_list.state.selected() {
+            Some(i) => {
+                if i >= self.todo_list.items.len().saturating_sub(1) {
+                    i
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.todo_list.state.select(Some(next_index));
     }
     pub fn select_previous(&mut self) {
-        self.todo_list.state.select_previous();
+        if self.todo_list.items.is_empty() {
+            self.todo_list.state.select(None);
+            return;
+        }
+
+        let prev_index = match self.todo_list.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    0
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.todo_list.state.select(Some(prev_index));
     }
 
     pub fn select_first(&mut self) {
-        self.todo_list.state.select_first();
+        if !self.todo_list.items.is_empty() {
+            self.todo_list.state.select(Some(0));
+        }
     }
 
     pub fn select_last(&mut self) {
-        self.todo_list.state.select_last();
+        if !self.todo_list.items.is_empty() {
+            self.todo_list
+                .state
+                .select(Some(self.todo_list.items.len() - 1));
+        }
     }
 
     /// Changes the status of the selected list item
